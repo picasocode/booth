@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL_POOLED")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// A Booth meeting: up to 4 languages, enforced at creation and at join.
+model Meeting {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  name         String
+  languages    String // JSON string[], max 4 language codes
+  createdAt    DateTime      @default(now())
+  participants Participant[]
+  usage        UsageLog[]
+}
+
+model Participant {
+  id         String   @id @default(cuid())
+  meetingId  String
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  name       String
+  language   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([meetingId])
+}
+
+// Metered interpretation seconds, one row per closed (device, target) run.
+model UsageLog {
+  id         String   @id @default(cuid())
+  meetingId  String
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  engine     String // "s2s" | "cascade"
+  sourceLang String
+  targetLang String
+  seconds    Float
+  costUsd    Float    @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([meetingId])
+  @@index([createdAt])
+}

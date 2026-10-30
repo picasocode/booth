@@ -1,2 +1,38 @@
-skills/
+# dependencies / build
 node_modules/
+.next/
+out/
+
+# platform scaffold
+.zscripts/
+dev.log
+server.log
+relay.log
+*.log
+
+# databases and secrets — never commit
+db/*.db
+db/*.db-journal
+db/booth-openai.json
+.booth-internal
+.env
+.env.*
+
+# user content and local artifacts
+upload/
+download/
+scripts/probe_out/
+
+# platform-internal material
+skills/
+examples/
+tests/
+
+# misc
+.DS_Store
+*.pem
+
+# env files with real credentials — never commit
+.env
+.env.*
+!.env.example

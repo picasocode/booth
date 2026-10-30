@@ -1,0 +1,189 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body), var(--font-deva), var(--font-tamil), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-live: var(--live);
+  --color-live-deep: var(--live-deep);
+  --color-warn: var(--warn);
+  --color-mic: var(--mic);
+  --color-hairline: var(--hairline);
+}
+
+/*
+  Booth design tokens — "the interpretation console".
+  Porcelain paper with a green cast, deep spruce ink, bottle-green live accent.
+  Functional colours: live (on-air), warn (lag), mic (recording). No decoration
+  colours; language dots carry their own per-language values from languages.ts.
+*/
+:root {
+  --radius: 0.5rem;
+  --background: #eff2ec;
+  --foreground: #17332b;
+  --card: #f7f9f4;
+  --card-foreground: #17332b;
+  --popover: #f7f9f4;
+  --popover-foreground: #17332b;
+  --primary: #0e7a54;
+  --primary-foreground: #f2f7f0;
+  --secondary: #e3e9df;
+  --secondary-foreground: #1d3a31;
+  --muted: #e5eae1;
+  --muted-foreground: #55685d;
+  --accent: #dde6da;
+  --accent-foreground: #14332a;
+  --destructive: #b3401f;
+  --border: #d3dccc;
+  --input: #c6d1c1;
+  --ring: #0e7a54;
+  --chart-1: #0e7a54;
+  --chart-2: #b45309;
+  --chart-3: #7a3be0;
+  --chart-4: #3b7dbf;
+  --chart-5: #c2382e;
+  --sidebar: #f7f9f4;
+  --sidebar-foreground: #17332b;
+  --sidebar-primary: #0e7a54;
+  --sidebar-primary-foreground: #f2f7f0;
+  --sidebar-accent: #dde6da;
+  --sidebar-accent-foreground: #14332a;
+  --sidebar-border: #d3dccc;
+  --sidebar-ring: #0e7a54;
+  --live: #0e7a54;
+  --live-deep: #0a5f42;
+  --warn: #a85b00;
+  --mic: #c24428;
+  --hairline: #d3dccc;
+}
+
+.dark {
+  --background: #0f1d18;
+  --foreground: #e3ede4;
+  --card: #14251f;
+  --card-foreground: #e3ede4;
+  --popover: #14251f;
+  --popover-foreground: #e3ede4;
+  --primary: #3baf80;
+  --primary-foreground: #0b1512;
+  --secondary: #1a2b24;
+  --secondary-foreground: #dce8dd;
+  --muted: #1a2b24;
+  --muted-foreground: #93a89a;
+  --accent: #1d3028;
+  --accent-foreground: #e3ede4;
+  --destructive: #e06844;
+  --border: #24382f;
+  --input: #2c443a;
+  --ring: #3baf80;
+  --chart-1: #3baf80;
+  --chart-2: #d99a4e;
+  --chart-3: #9d7ae8;
+  --chart-4: #6ba3d8;
+  --chart-5: #d96a5c;
+  --sidebar: #14251f;
+  --sidebar-foreground: #e3ede4;
+  --sidebar-primary: #3baf80;
+  --sidebar-primary-foreground: #0b1512;
+  --sidebar-accent: #1d3028;
+  --sidebar-accent-foreground: #e3ede4;
+  --sidebar-border: #24382f;
+  --sidebar-ring: #3baf80;
+  --live: #3baf80;
+  --live-deep: #2c8f67;
+  --warn: #d99a4e;
+  --mic: #e06844;
+  --hairline: #24382f;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Caption type: Latin from Public Sans, Indic scripts from Noto */
+.font-caption {
+  font-family: var(--font-body), var(--font-deva), var(--font-tamil), ui-sans-serif, system-ui, sans-serif;
+}
+.font-display {
+  font-family: var(--font-display), var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The one orchestrated moment: the caption reel settle */
+@keyframes booth-settle {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.booth-settle {
+  animation: booth-settle 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* live lane pulse (tiny, functional) */
+@keyframes booth-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.booth-pulse {
+  animation: booth-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booth-settle,
+  .booth-pulse {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
