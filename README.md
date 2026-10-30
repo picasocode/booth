@@ -8,8 +8,10 @@ booth does.
 relay worker, no server-side audio path. Each participant's browser is its own
 interpretation booth: it listens to the meeting (microphone in the room, or a
 shared meeting tab), and produces translated voice + captions for the language
-that person selected. All API configuration happens in the app's Settings
-dialog and is stored on the device (localStorage) — never on the server.
+that person selected. ONE OpenAI key is set once in the app's Settings dialog
+(stored on the Booth server in the AppConfig table) and is shared by the whole
+deployment — the host and every guest use it automatically; guests never need
+to configure anything. The raw key is never sent back to any browser.
 
 ## Architecture
 
