@@ -62,6 +62,21 @@ export function HomeView({
     }
   }, [])
 
+  // First visit with no key yet: open the setup dialog automatically so the
+  // settings UI is impossible to miss. Only nags once per browser.
+  useEffect(() => {
+    if (settings.openaiKey.trim()) return
+    let seen = false
+    try {
+      seen = localStorage.getItem('booth-setup-seen') === '1'
+      localStorage.setItem('booth-setup-seen', '1')
+    } catch {
+      // ignore
+    }
+    if (!seen) setSettingsOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     // remember the chosen hear-language when the room language set changes
     if (picked.length > 0 && !picked.includes(speakAs)) setSpeakAs(picked[0])
@@ -175,6 +190,23 @@ export function HomeView({
           </div>
         </div>
       </header>
+
+      {!keyReady && (
+        <div className="border-b border-warn/40 bg-warn/10">
+          <div className="mx-auto max-w-6xl px-5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+            <span className="font-medium text-foreground">One step left:</span>
+            <span className="text-muted-foreground">
+              add your OpenAI API key to turn on interpretation — it stays on this device.
+            </span>
+            <button
+              className="ml-auto underline underline-offset-2 font-medium text-foreground hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              onClick={() => setSettingsOpen(true)}
+            >
+              Open setup
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-5 pt-14 pb-16 grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
