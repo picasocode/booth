@@ -4,7 +4,7 @@ import { LANG_MAP } from '@/lib/booth/languages'
 import { Button } from '@/components/ui/button'
 import { Settings } from 'lucide-react'
 import { SettingsDialog } from '@/components/booth/SettingsDialog'
-import { useBoothSettings } from '@/lib/booth/settings-store'
+import { useSharedConfig } from '@/lib/booth/config-store'
 import { useState } from 'react'
 
 export interface ParticipantView {
@@ -140,8 +140,7 @@ export function CaptionEntry({
 /** Settings chip shown in the room header — opens the settings dialog. */
 export function SettingsChip() {
   const [open, setOpen] = useState(false)
-  const settings = useBoothSettings()
-  const hasKey = settings.openaiKey.trim().length > 10
+  const shared = useSharedConfig()
   return (
     <>
       <button
@@ -150,7 +149,7 @@ export function SettingsChip() {
         onClick={() => setOpen(true)}
       >
         <Settings className="h-3 w-3" aria-hidden />
-        settings{!hasKey && <span className="text-warn">· key needed</span>}
+        settings{!shared.configured && <span className="text-warn">· key needed</span>}
       </button>
       <SettingsDialog open={open} onOpenChange={setOpen} />
     </>

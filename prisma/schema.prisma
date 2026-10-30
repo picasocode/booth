@@ -8,6 +8,15 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
+// Single-row deployment config: the ONE shared OpenAI key set once in the
+// settings UI. Every participant (host and guests) uses it automatically;
+// the raw key is never sent back to any browser.
+model AppConfig {
+  id        String   @id @default("booth")
+  openaiKey String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
 // A Booth meeting: up to 4 languages, enforced at creation and at join.
 model Meeting {
   id           String        @id @default(cuid())

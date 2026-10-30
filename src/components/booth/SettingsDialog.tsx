@@ -1,12 +1,17 @@
 'use client'
 
 /**
- * Booth settings — every API configuration and connection setting, done in
- * the UI itself. The key is stored in this browser (localStorage) only.
+ * Booth settings — ONE shared API setup for the whole deployment.
+ *
+ * The OpenAI key is set here ONCE (by whoever deploys or hosts) and stored
+ * on the Booth server. Every participant — host and guests — then uses it
+ * automatically; nobody configures a key per device, and the raw key is
+ * never shown or sent back to any browser.
+ *
  * The form lives in an inner component so its local state re-initialises
- * from the store every time the dialog opens.
+ * from the server every time the dialog opens.
  */
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +28,7 @@ import {
   type BoothSettings,
   type EngineMode,
 } from '@/lib/booth/settings-store'
+import { refreshSharedConfig, useSharedConfig } from '@/lib/booth/config-store'
 
 const ENGINE_OPTIONS: Array<{ id: EngineMode; label: string; hint: string }> = [
   {
@@ -94,8 +100,8 @@ export function SettingsDialog({
             Booth settings
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed">
-            All API configuration happens here, in your browser. The key is stored on this
-            device only — the Booth server never sees or stores it.
+            One API setup for everyone: the key saved here works for the host and every
+            guest automatically — no per-device configuration.
           </DialogDescription>
         </DialogHeader>
         {open && <SettingsForm onDone={() => onOpenChange(false)} />}
@@ -106,11 +112,11 @@ export function SettingsDialog({
 
 function SettingsForm({ onDone }: { onDone: () => void }) {
   const settings = useBoothSettings()
+  const shared = useSharedConfig()
   const [keyValue, setKeyValue] = useState('')
-  const [keyState, setKeyState] = useState<'idle' | 'checking' | 'ok' | 'bad'>(
-    looksLikeOpenAiKey(settings.openaiKey) ? 'ok' : 'idle',
-  )
+  const [keyState, setKeyState] = useState<'idle' | 'checking' | 'ok' | 'bad'>('idle')
   const [keyMsg, setKeyMsg] = useState('')
+  const [busy, setBusy] = useState(false)
   const [engine, setEngine] = useState<EngineMode>(settings.engine)
   const [voiceOut, setVoiceOut] = useState(settings.voiceOut)
   const [ttsVoice, setTtsVoice] = useState(settings.ttsVoice)
@@ -120,24 +126,73 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  async function verifyKey() {
-    const key = keyValue.trim() || settings.openaiKey.trim()
+  useEffect(() => {
+    void refreshSharedConfig()
+  }, [])
+
+  /** Save the shared key once — it then works for host AND all guests. */
+  async function saveKey() {
+    const key = keyValue.trim()
     if (!looksLikeOpenAiKey(key)) {
       setKeyState('bad')
       setKeyMsg('That does not look like an OpenAI key (expected sk-…).')
       return
     }
-    setKeyState('checking')
+    setBusy(true)
     setKeyMsg('')
+    try {
+      const r = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key }),
+      })
+      const d = await r.json().catch(() => null)
+      if (r.ok) {
+        setKeyState('ok')
+        setKeyMsg('Key saved — everyone in this Booth now uses it automatically.')
+        setKeyValue('')
+        await refreshSharedConfig()
+        // verify the saved key against the realtime endpoint
+        const v = await fetch('/api/realtime-token', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ language: 'en' }),
+        })
+        if (!v.ok) {
+          const vd = await v.json().catch(() => null)
+          setKeyState('bad')
+          setKeyMsg(
+            vd?.error
+              ? `Saved, but OpenAI rejected it: ${String(vd.error).slice(0, 140)}`
+              : `Saved, but verification failed (${v.status}).`,
+          )
+        }
+      } else {
+        setKeyState('bad')
+        setKeyMsg(d?.error ? String(d.error).slice(0, 160) : `Could not save (${r.status}).`)
+      }
+    } catch {
+      setKeyState('bad')
+      setKeyMsg('Network problem while saving — try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Explicit verify of whatever key is already saved on the server. */
+  const verifySaved = useCallback(async () => {
+    setBusy(true)
+    setKeyMsg('')
+    setKeyState('checking')
     try {
       const r = await fetch('/api/realtime-token', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key, language: 'en' }),
+        body: JSON.stringify({ language: 'en' }),
       })
       if (r.ok) {
         setKeyState('ok')
-        setKeyMsg('Key verified — speech-to-speech is ready.')
+        setKeyMsg('Verified — speech-to-speech is ready for everyone.')
       } else {
         const d = await r.json().catch(() => null)
         setKeyState('bad')
@@ -145,13 +200,26 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
       }
     } catch {
       setKeyState('bad')
-      setKeyMsg('Network problem while verifying — the key can still be saved.')
+      setKeyMsg('Network problem while verifying.')
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
+  async function removeKey() {
+    setBusy(true)
+    try {
+      await fetch('/api/config', { method: 'DELETE' })
+      await refreshSharedConfig()
+      setKeyState('idle')
+      setKeyMsg('Shared key removed.')
+    } finally {
+      setBusy(false)
     }
   }
 
   function save() {
     const patch: Partial<BoothSettings> = {
-      openaiKey: keyValue.trim() || settings.openaiKey.trim(),
       engine,
       voiceOut,
       ttsVoice,
@@ -168,12 +236,12 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      {/* OpenAI key */}
+      {/* Shared OpenAI key — one setup for the whole deployment */}
       <div className="space-y-1.5">
         <Label htmlFor="openai-key" className="text-[13px]">
           OpenAI API key{' '}
           <span className="font-normal text-muted-foreground">
-            {keyState === 'ok' ? '· saved on this device' : '· required'}
+            {shared.configured ? `· shared ${shared.hint}` : '· not set yet'}
           </span>
         </Label>
         <div className="flex gap-2">
@@ -186,18 +254,17 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
               setKeyState('idle')
               setKeyMsg('')
             }}
-            placeholder={keyState === 'ok' ? '•••••••••••••••••••• (saved)' : 'sk-…'}
+            placeholder={shared.configured ? 'Paste a new key to replace it' : 'sk-…'}
             autoComplete="off"
             aria-label="OpenAI API key"
           />
           <Button
-            variant="outline"
             size="sm"
-            className="h-9 border-hairline shrink-0"
-            onClick={verifyKey}
-            disabled={keyState === 'checking'}
+            className="h-9 bg-live hover:bg-live-deep text-primary-foreground shrink-0"
+            onClick={() => void saveKey()}
+            disabled={busy || !looksLikeOpenAiKey(keyValue.trim())}
           >
-            {keyState === 'checking' ? 'Checking…' : 'Verify'}
+            {busy && keyState !== 'bad' ? 'Saving…' : 'Save for everyone'}
           </Button>
         </div>
         {keyMsg && (
@@ -207,6 +274,22 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
           >
             {keyMsg}
           </p>
+        )}
+        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+          {shared.configured
+            ? 'A key is already active for all participants. '
+            : 'Set it once here — after that, guests just open a link and it works. '}
+          The key is stored on the Booth server and never shown again.
+        </p>
+        {shared.configured && (
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" className="h-7 text-[12px] border-hairline" onClick={() => void verifySaved()} disabled={busy}>
+              Test the saved key
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-[12px] text-destructive hover:text-destructive" onClick={() => void removeKey()} disabled={busy}>
+              Remove
+            </Button>
+          </div>
         )}
       </div>
 
@@ -232,6 +315,9 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
           ))}
         </div>
         {engineHint && <p className="text-[11.5px] text-muted-foreground leading-relaxed">{engineHint}</p>}
+        <p className="text-[11px] text-muted-foreground">
+          Engine, voice and model choices are personal to this device; the API key is shared.
+        </p>
       </div>
 
       {/* Voice output */}
@@ -279,7 +365,7 @@ function SettingsForm({ onDone }: { onDone: () => void }) {
           className="bg-live hover:bg-live-deep text-primary-foreground shrink-0"
           onClick={save}
         >
-          {saved ? 'Saved ✓' : 'Save settings'}
+          {saved ? 'Saved ✓' : 'Save preferences'}
         </Button>
       </div>
     </div>

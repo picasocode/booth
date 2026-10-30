@@ -1,18 +1,16 @@
 'use client'
 
 /**
- * Booth settings — ALL API configuration lives here, in the UI, on the
- * device. The OpenAI key and every model choice are stored in this browser's
- * localStorage only; nothing is sent to the Booth server. The Booth server
- * (the small Next.js deployment) never sees or stores API keys.
+ * Booth settings — per-device PREFERENCES only (engine, voice, models).
+ * The OpenAI key is NOT stored here anymore: one shared key is set once in
+ * the settings UI and kept on the Booth server for the whole deployment,
+ * so the host and every guest work without any per-device key.
  */
 import { useSyncExternalStore } from 'react'
 
 export type EngineMode = 'auto' | 's2s' | 'cascade' | 'captions'
 
 export interface BoothSettings {
-  /** OpenAI API key (sk-…). Stored in localStorage only. */
-  openaiKey: string
   /** auto: speech-to-speech when possible, cascade otherwise. */
   engine: EngineMode
   /** Play the translated voice (captions always run). */
@@ -28,7 +26,6 @@ export interface BoothSettings {
 }
 
 export const DEFAULT_SETTINGS: BoothSettings = {
-  openaiKey: '',
   engine: 'auto',
   voiceOut: true,
   ttsVoice: 'alloy',
@@ -115,8 +112,4 @@ export function saveBoothSettings(patch: Partial<BoothSettings>) {
 /** Shape-only check: classic sk- keys and new project keys. */
 export function looksLikeOpenAiKey(key: string): boolean {
   return /^sk-[A-Za-z0-9_\-]{20,}$/.test(key)
-}
-
-export function hasApiKey(s: BoothSettings): boolean {
-  return looksLikeOpenAiKey(s.openaiKey.trim())
 }

@@ -3,15 +3,13 @@
  * gpt-realtime-translate — the lowest-latency interpretation path
  * (first translated voice in roughly 0.7–1.8 s).
  *
- * All configuration happens in the browser UI: the OpenAI key comes from the
- * settings store. The browser first exchanges the key for a short-lived
- * client secret (directly with api.openai.com; with a tiny same-app fallback
- * route if the browser request is ever blocked), then performs the WebRTC
- * offer/answer exchange itself. The Booth server never touches audio.
+ * No per-device key: the client exchanges its WebRTC offer for a short-lived
+ * client secret through the Booth server, which injects the ONE shared key
+ * saved by the host. Audio itself still streams browser→OpenAI directly
+ * over WebRTC (the server never touches audio packets).
  */
 import { OPENAI_VOICE_TARGETS } from '../languages'
 
-const TRANSLATIONS_SECRET_URL = 'https://api.openai.com/v1/realtime/translations/client_secrets'
 const TRANSLATIONS_CALLS_URL = 'https://api.openai.com/v1/realtime/translations/calls'
 export const S2S_MODEL = 'gpt-realtime-translate'
 
@@ -19,38 +17,17 @@ export function s2sSupportsTarget(lang: string): boolean {
   return OPENAI_VOICE_TARGETS.has(lang)
 }
 
-export async function fetchClientSecret(apiKey: string, targetLang: string): Promise<string> {
-  const body = JSON.stringify({
-    session: {
-      model: S2S_MODEL,
-      audio: { output: { language: targetLang } },
-    },
-  })
-  // 1) direct from the browser (keeps everything in the UI)
-  try {
-    const r = await fetch(TRANSLATIONS_SECRET_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      body,
-    })
-    if (r.ok) {
-      const secret = extractSecret(await r.json())
-      if (secret) return secret
-    }
-  } catch {
-    // fall through to the same-app proxy
-  }
-  // 2) tiny fallback endpoint inside this deployment (forwards the request)
-  const r2 = await fetch('/api/realtime-token', {
+export async function fetchClientSecret(targetLang: string): Promise<string> {
+  const r = await fetch('/api/realtime-token', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: apiKey, language: targetLang }),
+    body: JSON.stringify({ language: targetLang }),
   })
-  const data = await r2.json().catch(() => null)
-  if (!r2.ok) {
+  const data = await r.json().catch(() => null)
+  if (!r.ok) {
     const detail =
       (data && ((data as Record<string, unknown>).error as unknown)) ||
-      `client secret failed (${r2.status})`
+      `client secret failed (${r.status})`
     throw new Error(String(detail).slice(0, 200))
   }
   const secret = extractSecret(data)
@@ -153,10 +130,9 @@ export class S2sSession {
     track: MediaStreamTrack
     sourceStream: MediaStream
     targetLang: string
-    apiKey: string
     events: S2sEvents
   }): Promise<S2sSession> {
-    const secret = await fetchClientSecret(opts.apiKey, opts.targetLang)
+    const secret = await fetchClientSecret(opts.targetLang)
 
     const pc = new RTCPeerConnection()
     const dc = pc.createDataChannel('oai-events')

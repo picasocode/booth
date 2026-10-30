@@ -1,8 +1,9 @@
 /**
- * Cascade engine — the always-available fallback that runs entirely in the
- * browser against the OpenAI REST API with the user's own key:
+ * Cascade engine — the always-available fallback:
  *   streaming ASR windows -> sentence assembly -> LLM interpreter -> streaming TTS
- * Ported from the relay worker; same timing constants, same interpreter prompt.
+ *
+ * Calls go through the same-app /api/openai proxy, which injects the ONE
+ * shared key saved by the host — guests never need a key of their own.
  */
 import { LANG_MAP } from '../languages'
 import type { BoothSettings } from '../settings-store'
@@ -138,16 +139,14 @@ export class CascadeChannel {
   }
 
   private async transcribe(pcm: Int16Array): Promise<string> {
-    const key = this.settings.openaiKey.trim()
     await this.pacer.wait('asr', ASR_MIN_INTERVAL_MS)
     const wav = pcmToWav(pcm, SAMPLE_RATE)
     const form = new FormData()
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'audio.wav')
     form.append('model', this.settings.sttModel)
     if (this.sourceLang && this.sourceLang !== 'auto') form.append('language', this.sourceLang)
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const res = await fetch('/api/openai/audio/transcriptions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${key}` },
       body: form,
     })
     if (!res.ok) {
@@ -177,12 +176,9 @@ export class CascadeChannel {
     ])
 
     await this.pacer.wait('llm', LLM_MIN_INTERVAL_MS)
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await fetch('/api/openai/chat/completions', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.settings.openaiKey.trim()}`,
-        'content-type': 'application/json',
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model: this.settings.llmModel,
         temperature: 0.2,
@@ -221,12 +217,9 @@ export class CascadeChannel {
 
   private async speak(text: string) {
     await this.pacer.wait('tts', TTS_MIN_INTERVAL_MS)
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+    const res = await fetch('/api/openai/audio/speech', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.settings.openaiKey.trim()}`,
-        'content-type': 'application/json',
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model: this.settings.ttsModel,
         input: text.slice(0, 1000),

@@ -15,7 +15,8 @@ import { SettingsDialog } from '@/components/booth/SettingsDialog'
 import { BoothInterpreter, type EngineUsed, type InterpStatus } from '@/lib/booth/engine/interpreter'
 import { PcmPlayer } from '@/lib/booth/audio/player'
 import { LANG_MAP } from '@/lib/booth/languages'
-import { hasApiKey, useBoothSettings } from '@/lib/booth/settings-store'
+import { useBoothSettings } from '@/lib/booth/settings-store'
+import { useSharedConfig } from '@/lib/booth/config-store'
 import type { BoothSession } from '@/components/booth/session-store'
 
 interface CaptionItem {
@@ -46,6 +47,7 @@ export function RoomView({
   onLeave: () => void
 }) {
   const settings = useBoothSettings()
+  const shared = useSharedConfig()
   const playerRef = useRef<PcmPlayer | null>(null)
   const interpRef = useRef<BoothInterpreter | null>(null)
   const usageRef = useRef<UsageRow[]>([])
@@ -135,6 +137,7 @@ export function RoomView({
           stream,
           targetLang: myLangRef.current,
           settings,
+          keyReady: shared.configured,
           player,
           events: {
             onStatus: (s, detail) => {
@@ -176,7 +179,7 @@ export function RoomView({
         setStarting(false)
       }
     },
-    [settings, voiceOut],
+    [settings, voiceOut, shared.configured],
   )
 
   const startMic = useCallback(async () => {
@@ -297,7 +300,7 @@ export function RoomView({
 
   const mins = Math.floor(elapsedS / 60)
   const secs = elapsedS % 60
-  const keyReady = hasApiKey(settings)
+  const keyReady = shared.configured
   const me = participants.find((p) => p.participantId === session.participantId)
   const others = participants.filter((p) => p.participantId !== session.participantId)
 
@@ -451,7 +454,7 @@ export function RoomView({
             <div className="mx-4 mt-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-[12.5px] leading-relaxed text-foreground flex items-start gap-2">
               <span aria-hidden className="mt-1 h-1.5 w-1.5 rounded-full bg-warn shrink-0" />
               <p className="min-w-0">
-                {fatal || notice || 'Add your OpenAI key in settings — interpretation needs it, and it stays on your device.'}
+                {fatal || notice || 'No shared OpenAI key yet — the host adds it once in settings, then it works for everyone.'}
                 <button
                   className="ml-2 underline underline-offset-2 hover:no-underline"
                   onClick={() => setSettingsOpen(true)}

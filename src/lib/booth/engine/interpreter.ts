@@ -16,7 +16,7 @@ import { VoiceMeter } from '../audio/player'
 import type { PcmPlayer } from '../audio/player'
 import { CascadeChannel } from './cascade'
 import { S2sSession, s2sSupportsTarget } from './s2s'
-import { hasApiKey, type BoothSettings } from '../settings-store'
+import type { BoothSettings } from '../settings-store'
 
 export type InterpStatus = 'idle' | 'connecting' | 'live' | 'error'
 export type EngineUsed = 's2s' | 'cascade'
@@ -69,13 +69,17 @@ export class BoothInterpreter {
     settings: BoothSettings
     player: PcmPlayer
     events: InterpreterEvents
+    keyReady: boolean
   }) {
     this.stream = opts.stream
     this.targetLang = opts.targetLang
     this.settings = opts.settings
     this.player = opts.player
     this.events = opts.events
+    this.keyReady = opts.keyReady
   }
+
+  private keyReady: boolean
 
   static async start(opts: {
     stream: MediaStream
@@ -83,6 +87,7 @@ export class BoothInterpreter {
     settings: BoothSettings
     player: PcmPlayer
     events: InterpreterEvents
+    keyReady: boolean
   }): Promise<BoothInterpreter> {
     const it = new BoothInterpreter(opts)
     await it.init()
@@ -107,7 +112,7 @@ export class BoothInterpreter {
   private async buildEngine() {
     const settings = this.effectiveSettings()
     const mode = settings.engine
-    const keyPresent = hasApiKey(settings)
+    const keyPresent = this.keyReady
     const track = this.stream.getAudioTracks()[0]
 
     // source meter (mic or tab audio level)
@@ -120,7 +125,7 @@ export class BoothInterpreter {
       (mode === 's2s' || (mode === 'auto' && s2sSupportsTarget(this.targetLang)))
 
     if (mode === 's2s' && !keyPresent) {
-      this.setStatus('error', 'Add your OpenAI key in settings to use speech-to-speech.')
+      this.setStatus('error', 'No shared OpenAI key yet — add one in settings (set once, works for everyone).')
       return
     }
     if (mode === 's2s' && !s2sSupportsTarget(this.targetLang)) {
@@ -136,7 +141,6 @@ export class BoothInterpreter {
           track,
           sourceStream: this.stream,
           targetLang: this.targetLang,
-          apiKey: settings.openaiKey.trim(),
           events: {
             onSourceDelta: (t) => this.pushSourceDelta(t),
             onTargetDelta: (t) => this.pushTargetDelta(t, 's2s', 'delta'),
@@ -167,7 +171,7 @@ export class BoothInterpreter {
     }
 
     if (!keyPresent) {
-      this.setStatus('error', 'No OpenAI key configured — add one in settings to start interpreting.')
+      this.setStatus('error', 'No shared OpenAI key configured — add one in settings (set once, works for everyone).')
       return
     }
 

@@ -12,7 +12,7 @@ import {
   LanguageLimitNote,
 } from '@/components/booth/LanguageControls'
 import { LANGUAGES, MAX_ROOM_LANGUAGES } from '@/lib/booth/languages'
-import { hasApiKey, useBoothSettings } from '@/lib/booth/settings-store'
+import { useSharedConfig } from '@/lib/booth/config-store'
 
 export interface JoinResult {
   participantId: string
@@ -32,7 +32,6 @@ export function HomeView({
   onJoined: (r: JoinResult) => void
   prefillCode: string
 }) {
-  const settings = useBoothSettings()
   const [roomName, setRoomName] = useState('')
   const [picked, setPicked] = useState<string[]>(['en', 'hi', 'ta'])
   const [myName, setMyName] = useState('')
@@ -49,6 +48,8 @@ export function HomeView({
 
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const shared = useSharedConfig()
+  const keyReady = shared.configured
 
   useEffect(() => {
     fetch('/api/usage')
@@ -62,10 +63,10 @@ export function HomeView({
     }
   }, [])
 
-  // First visit with no key yet: open the setup dialog automatically so the
-  // settings UI is impossible to miss. Only nags once per browser.
+  // First visit with no shared key yet: open the setup dialog automatically
+  // so the settings UI is impossible to miss. Only nags once per browser.
   useEffect(() => {
-    if (settings.openaiKey.trim()) return
+    if (!shared.loaded || shared.configured) return
     let seen = false
     try {
       seen = localStorage.getItem('booth-setup-seen') === '1'
@@ -75,7 +76,7 @@ export function HomeView({
     }
     if (!seen) setSettingsOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [shared.loaded, shared.configured])
 
   useEffect(() => {
     // remember the chosen hear-language when the room language set changes
@@ -170,7 +171,6 @@ export function HomeView({
   }
 
   const totalMinutes = (usage?.engines ?? []).reduce((a, e) => a + e.minutes, 0)
-  const keyReady = hasApiKey(settings)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -196,7 +196,7 @@ export function HomeView({
           <div className="mx-auto max-w-6xl px-5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
             <span className="font-medium text-foreground">One step left:</span>
             <span className="text-muted-foreground">
-              add your OpenAI API key to turn on interpretation — it stays on this device.
+              add the shared OpenAI key in Settings — set it once, and it works for the host and every guest.
             </span>
             <button
               className="ml-auto underline underline-offset-2 font-medium text-foreground hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -394,13 +394,13 @@ export function HomeView({
               aria-hidden
               className={`h-1.5 w-1.5 rounded-full ${keyReady ? 'bg-live' : 'bg-warn'}`}
             />
-            {keyReady ? 'Interpretation ready on this device' : 'Add an OpenAI key in Settings to start'}
+            {keyReady ? 'Shared key active — everyone can interpret' : 'Add the shared OpenAI key in Settings to start'}
           </span>
           <button
             className="underline underline-offset-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             onClick={() => setSettingsOpen(true)}
           >
-            {keyReady ? 'Manage API settings' : 'Configure API settings in the UI'}
+            {keyReady ? 'Manage the shared API key' : 'Set up the shared API key'}
           </button>
           {usage && totalMinutes > 0 && (
             <span>Interpreted {totalMinutes.toFixed(1)} min in the last 24 h</span>

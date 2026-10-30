@@ -1,26 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSharedKey } from '@/lib/booth/server-key'
 
 /**
- * Fallback for the browser's direct call to OpenAI's client-secret endpoint.
- * The browser always tries api.openai.com first (all configuration lives in
- * the UI); if that request is ever blocked, it retries through this route,
- * which simply forwards it. Keys come from the request body (the user's own
- * key from the settings UI) or the optional OPENAI_API_KEY environment
- * variable. Nothing is stored.
+ * Speech-to-speech entry point — returns a short-lived realtime client
+ * secret to ANY participant, using the ONE shared key saved by the host.
+ * No per-device key is needed; the raw key never leaves the server.
+ * A key in the request body is still accepted as an explicit override
+ * (used by the settings dialog to verify a candidate key before saving).
  */
 export async function POST(req: NextRequest) {
   let body: { key?: string; language?: string } = {}
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'bad request' }, { status: 400 })
+    body = {}
   }
 
-  const key = (body.key ?? process.env.OPENAI_API_KEY ?? '').trim()
+  const key = (body.key ?? '').trim() || (await getSharedKey())
   const language = String(body.language ?? 'en').slice(0, 8)
   if (!key) {
     return NextResponse.json(
-      { error: 'No OpenAI key — add one in the Booth settings.' },
+      { error: 'No shared OpenAI key — add one in the Booth settings (set once, works for everyone).' },
       { status: 400 },
     )
   }
