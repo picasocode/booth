@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const name = String(body.name ?? '').trim().slice(0, 80) || 'Untitled meeting'
-    const languages: unknown = Array.isArray(body.languages) ? body.languages : []
+    const languages: unknown[] = Array.isArray(body.languages) ? body.languages : []
 
     if (languages.length < 2) {
       return NextResponse.json({ error: 'Pick at least two languages.' }, { status: 400 })

@@ -84,7 +84,6 @@ export function HomeView({
       // ignore
     }
     if (!seen) setSettingsOpen(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shared.loaded, shared.configured])
 
   useEffect(() => {
@@ -245,8 +244,8 @@ export function HomeView({
             <p className="mt-5 max-w-[58ch] text-[17px] leading-relaxed text-muted-foreground">
               Booth turns your browser into a live interpretation booth: translated voice and
               captions in up to four languages, running a few seconds behind the speaker —
-              the way a human booth does. Every connection is configured right here in the
-              app, on your device.
+              the way a human booth does. One shared key, set once, works for the host and
+              every guest.
             </p>
             <div className="mt-8 max-w-xl">
               <CaptionReel />
@@ -257,9 +256,13 @@ export function HomeView({
             </p>
           </section>
 
-          {/* Create / Join */}
-          <section className="grid gap-10 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div className="rounded-xl border border-hairline bg-card p-6">
+          {/* Create / Join — one console panel */}
+          <section
+            className="rounded-xl border border-hairline bg-card"
+            aria-label="Open a room or join with a code"
+          >
+            <div className="grid xl:grid-cols-2">
+            <div className="p-6">
               <h2 className="font-display text-xl font-bold tracking-tight">Open a room</h2>
               <p className="mt-1 text-[13px] text-muted-foreground">
                 Pick the languages people will hear.
@@ -331,7 +334,14 @@ export function HomeView({
               </div>
             </div>
 
-            <div className="rounded-xl border border-hairline bg-card p-6 self-start">
+              {/* seam between the panel halves on narrow screens */}
+              <div className="relative border-t border-hairline xl:hidden" aria-hidden="true">
+                <span className="absolute left-1/2 -translate-x-1/2 -top-2 bg-card px-3 text-[11px] text-muted-foreground">
+                  or join with a code
+                </span>
+              </div>
+
+              <div className="p-6 pt-8 xl:border-l xl:border-hairline xl:pt-6">
               <h2 className="font-display text-xl font-bold tracking-tight">Join a room</h2>
               <p className="mt-1 text-[13px] text-muted-foreground">
                 Enter the six-character code from the host.
@@ -348,7 +358,6 @@ export function HomeView({
                       const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
                       setJoinCode(v)
                       setJoinLangs(null)
-                      setJoinLang('')
                       if (v.length === 6) void lookupRoom(v).then((ok) => {
                         if (!ok) setJoinError('No room with that code.')
                       })
@@ -407,31 +416,32 @@ export function HomeView({
                   {joining ? 'Joining…' : 'Join'}
                 </Button>
               </div>
+              </div>
             </div>
           </section>
         </div>
 
-        {/* How it works */}
+        {/* Console spec strip */}
         <section className="border-t border-hairline bg-card/60">
-          <div className="mx-auto max-w-6xl px-5 py-10 grid gap-8 md:grid-cols-[1fr_1fr_1fr] text-[13.5px] leading-relaxed text-muted-foreground">
+          <div className="mx-auto max-w-6xl px-5 py-10 grid gap-8 md:grid-cols-3">
             <div>
-              <p className="font-medium text-foreground mb-1">1. Configure once, in the app</p>
-              <p>
-                Paste your OpenAI key in Settings and pick an engine. Everything is stored on
-                your device — there is no separate backend to run or configure.
+              <p className="font-display text-[15px] font-bold tracking-tight text-foreground">Set up once</p>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+                The host pastes the shared OpenAI key in Settings — it lives on the Booth
+                server, and every guest uses it automatically. No per-device setup.
               </p>
             </div>
-            <div>
-              <p className="font-medium text-foreground mb-1">2. Booth hears the meeting</p>
-              <p>
-                Use your microphone in the room, or share a meeting tab so Booth listens to
-                the call audio directly. Speech becomes translated voice and captions in
-                your language.
+            <div className="md:border-l md:border-hairline md:pl-5">
+              <p className="font-display text-[15px] font-bold tracking-tight text-foreground">Booth listens</p>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+                Use your microphone in the room, or share a meeting tab so Booth hears the
+                call audio directly. Speech becomes translated voice and captions in your
+                language.
               </p>
             </div>
-            <div>
-              <p className="font-medium text-foreground mb-1">3. Lowest-latency path first</p>
-              <p>
+            <div className="md:border-l md:border-hairline md:pl-5">
+              <p className="font-display text-[15px] font-bold tracking-tight text-foreground">Fastest path first</p>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
                 gpt-realtime-translate speaks in about a second. Where it is not available,
                 a cascade of transcription, translation and speech keeps every language
                 covered.

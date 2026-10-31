@@ -1,7 +1,6 @@
 'use client'
 
 import { LANG_MAP } from '@/lib/booth/languages'
-import { Button } from '@/components/ui/button'
 import { Settings } from 'lucide-react'
 import { SettingsDialog } from '@/components/booth/SettingsDialog'
 import { useSharedConfig } from '@/lib/booth/config-store'
@@ -171,5 +170,3 @@ export function SettingsChip() {
     </>
   )
 }
-
-export { Button as _Button }

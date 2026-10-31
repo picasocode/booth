@@ -36,3 +36,6 @@ tests/
 .env
 .env.*
 !.env.example
+
+# typescript incremental build info
+tsconfig.tsbuildinfo

@@ -150,7 +150,7 @@ export class BoothInterpreter {
     if (wantS2s) {
       this.setStatus('connecting')
       try {
-        this.s2s = await S2sSession.connect({
+        const s2s = await S2sSession.connect({
           track,
           sourceStream: this.stream,
           targetLang: this.targetLang,
@@ -161,7 +161,7 @@ export class BoothInterpreter {
             onConnected: () => {
               this.engine = 's2s'
               this.s2sConnectedAt = Date.now()
-              this.s2s.setMuted(this.voiceMuted)
+              s2s.setMuted(this.voiceMuted)
               this.setStatus('live')
               this.attachOutMeter()
             },
@@ -171,6 +171,7 @@ export class BoothInterpreter {
             onError: (m) => this.events.onError(m),
           },
         })
+        this.s2s = s2s
         // cascade is not needed alongside an open S2S session
         return
       } catch (e) {

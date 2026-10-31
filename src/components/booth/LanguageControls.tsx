@@ -53,37 +53,18 @@ export function LanguageChipToggle({
                 cc
               </span>
             )}
+            {isOn && (
+              <span
+                aria-hidden="true"
+                className="ml-auto inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-[4px] border border-live/40 bg-live/10 px-1 text-[9px] font-semibold text-live-deep dark:text-live"
+              >
+                {selected.indexOf(l.code) + 1}
+              </span>
+            )}
           </button>
         )
       })}
     </div>
-  )
-}
-
-export function LanguageSelect({
-  value,
-  onChange,
-  options,
-  id,
-}: {
-  value: string
-  onChange: (code: string) => void
-  options: string[]
-  id: string
-}) {
-  return (
-    <select
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-    >
-      {options.map((code) => (
-        <option key={code} value={code}>
-          {LANG_MAP[code]?.native ?? code} — {LANG_MAP[code]?.name ?? code}
-        </option>
-      ))}
-    </select>
   )
 }
 

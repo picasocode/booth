@@ -9,6 +9,7 @@ import {
   EngineStrip,
   SettingsChip,
   SpeakerRow,
+  VuBars,
   type ParticipantView,
 } from '@/components/booth/RoomPieces'
 import { SettingsDialog } from '@/components/booth/SettingsDialog'
@@ -337,18 +338,36 @@ export function RoomView({
               {session.code}
             </span>
           </div>
-          <span
-            className={`inline-flex items-center gap-1.5 text-[11px] ${status === 'error' ? 'text-warn' : 'text-muted-foreground'}`}
-            aria-live="polite"
-          >
+          {running && status === 'live' ? (
             <span
-              aria-hidden
-              className={`h-1.5 w-1.5 rounded-full ${
-                status === 'live' ? 'bg-live booth-pulse' : status === 'error' ? 'bg-warn' : 'bg-border'
+              className="inline-flex items-center gap-1.5 rounded-md bg-mic px-2 py-0.5 text-[11px] font-semibold text-white"
+              aria-live="polite"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white booth-pulse" />
+              on air
+            </span>
+          ) : running ? (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+                status === 'error' ? 'border-warn/50 text-warn' : 'border-live/50 text-live'
               }`}
-            />
-            {running ? (status === 'live' ? 'live' : 'connecting…') : 'idle'}
-          </span>
+              aria-live="polite"
+            >
+              <span
+                aria-hidden
+                className={`h-1.5 w-1.5 rounded-full booth-pulse ${status === 'error' ? 'bg-warn' : 'bg-live'}`}
+              />
+              {status === 'error' ? 'stalled' : 'warming up'}
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-0.5 text-[11px] text-muted-foreground"
+              aria-live="polite"
+            >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-border" />
+              standby
+            </span>
+          )}
           <span className="text-xs text-muted-foreground tabular-nums hidden sm:inline">
             {mins}:{String(secs).padStart(2, '0')}
           </span>
@@ -439,6 +458,14 @@ export function RoomView({
               </Button>
             )}
             <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-muted-foreground">mic in</span>
+              <VuBars rms={meters.self} live={running && meters.self > 0.005} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-muted-foreground">voice out</span>
+              <VuBars rms={meters.out} live={running && meters.out > 0.005} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
               <label htmlFor="voice-out-room" className="text-[13px] text-foreground">
                 Translated voice
               </label>
@@ -485,6 +512,9 @@ export function RoomView({
                   >
                     <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: LANG_MAP[l]?.dot ?? '#888' }} />
                     <span className="font-caption">{LANG_MAP[l]?.native ?? l}</span>
+                    <span aria-hidden="true" className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-[4px] border border-border px-1 text-[9px] font-semibold text-muted-foreground">
+                      {session.languages.indexOf(l) + 1}
+                    </span>
                   </button>
                 )
               })}
@@ -583,7 +613,7 @@ function humanMicError(e: unknown): string {
   return (e as Error).message?.slice(0, 200) || 'Could not start.'
 }
 
-type CaptionPatch = Partial<Pick<CaptionItem, 'sourceText' | 'targetText' | 'engine' | 'lagMs'>>
+type CaptionPatch = Partial<Pick<CaptionItem, 'sourceText' | 'targetText' | 'engine' | 'lagMs' | 'targetLang'>>
 
 function upsertAppend(list: CaptionItem[], id: string, patch: CaptionPatch): CaptionItem[] {
   const idx = list.findIndex((c) => c.id === id)

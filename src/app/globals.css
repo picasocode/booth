@@ -57,7 +57,7 @@
 */
 :root {
   --radius: 0.5rem;
-  --background: #eff2ec;
+  --background: #e9efe3;
   --foreground: #17332b;
   --card: #f7f9f4;
   --card-foreground: #17332b;
@@ -72,8 +72,8 @@
   --accent: #dde6da;
   --accent-foreground: #14332a;
   --destructive: #b3401f;
-  --border: #d3dccc;
-  --input: #c6d1c1;
+  --border: #c9d4c3;
+  --input: #bfcab8;
   --ring: #0e7a54;
   --chart-1: #0e7a54;
   --chart-2: #b45309;
@@ -92,11 +92,11 @@
   --live-deep: #0a5f42;
   --warn: #a85b00;
   --mic: #c24428;
-  --hairline: #d3dccc;
+  --hairline: #c9d4c3;
 }
 
 .dark {
-  --background: #0f1d18;
+  --background: #0d1a15;
   --foreground: #e3ede4;
   --card: #14251f;
   --card-foreground: #e3ede4;
