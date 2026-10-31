@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Wordmark, ThemeToggle } from '@/components/booth/Chrome'
@@ -8,7 +8,7 @@ import { CaptionReel } from '@/components/booth/CaptionReel'
 import { SettingsDialog } from '@/components/booth/SettingsDialog'
 import {
   LanguageChipToggle,
-  LanguageSelect,
+  LanguageMultiSelect,
   LanguageLimitNote,
 } from '@/components/booth/LanguageControls'
 import { LANGUAGES, MAX_ROOM_LANGUAGES } from '@/lib/booth/languages'
@@ -18,6 +18,8 @@ export interface JoinResult {
   participantId: string
   name: string
   language: string
+  /** Primary-first list of languages this participant understands. */
+  myLanguages: string[]
   meeting: { id: string; code: string; name: string; languages: string[] }
 }
 
@@ -35,16 +37,23 @@ export function HomeView({
   const [roomName, setRoomName] = useState('')
   const [picked, setPicked] = useState<string[]>(['en', 'hi', 'ta'])
   const [myName, setMyName] = useState('')
-  const [speakAs, setSpeakAs] = useState('en')
+  // languages I understand — primary (voice) first, the rest are captions
+  const [myPicked, setMyPicked] = useState<string[]>(['en'])
   const [createError, setCreateError] = useState('')
   const [creating, setCreating] = useState(false)
 
   const [joinCode, setJoinCode] = useState(prefillCode)
   const [joinName, setJoinName] = useState('')
-  const [joinLang, setJoinLang] = useState('')
   const [joinLangs, setJoinLangs] = useState<string[] | null>(null)
+  const [joinMyLangs, setJoinMyLangs] = useState<string[]>([])
   const [joinError, setJoinError] = useState('')
   const [joining, setJoining] = useState(false)
+
+  // freshest join selection for the async join flow (state lags after a lookup)
+  const joinMyLangsRef = useRef<string[]>([])
+  useEffect(() => {
+    joinMyLangsRef.current = joinMyLangs
+  }, [joinMyLangs])
 
   const [usage, setUsage] = useState<UsageInfo | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -79,9 +88,12 @@ export function HomeView({
   }, [shared.loaded, shared.configured])
 
   useEffect(() => {
-    // remember the chosen hear-language when the room language set changes
-    if (picked.length > 0 && !picked.includes(speakAs)) setSpeakAs(picked[0])
-  }, [picked, speakAs])
+    // keep "I understand" inside the room's language set, never empty
+    setMyPicked((prev) => {
+      const next = prev.filter((l) => picked.includes(l))
+      return next.length > 0 ? next : picked.slice(0, 1)
+    })
+  }, [picked])
 
   const toggleLang = (code: string) => {
     setCreateError('')
@@ -112,7 +124,7 @@ export function HomeView({
       })
       const data = await res.json()
       if (!res.ok) return setCreateError(data.error ?? 'Could not create the room.')
-      await doJoin(data.code, myName.trim(), speakAs)
+      await doJoin(data.code, myName.trim(), myPicked)
     } catch {
       setCreateError('Network problem — try again.')
     } finally {
@@ -120,13 +132,20 @@ export function HomeView({
     }
   }
 
-  async function lookupRoom(code: string): Promise<boolean> {
+  /** Returns the room languages plus a primary-first selection for the joiner. */
+  async function lookupRoom(code: string): Promise<{ langs: string[]; mine: string[] } | null> {
     const res = await fetch(`/api/meetings/${encodeURIComponent(code)}`)
-    if (!res.ok) return false
+    if (!res.ok) return null
     const data = await res.json()
-    setJoinLangs(data.languages)
-    if (!data.languages.includes(joinLang)) setJoinLang(data.languages[0])
-    return true
+    const langs = data.languages as string[]
+    const prev = joinMyLangsRef.current
+    const mine = (() => {
+      const kept = prev.filter((l: string) => langs.includes(l))
+      return kept.length > 0 ? kept : [langs[0]]
+    })()
+    setJoinLangs(langs)
+    setJoinMyLangs(mine)
+    return { langs, mine }
   }
 
   async function joinRoom() {
@@ -142,16 +161,18 @@ export function HomeView({
     }
     try {
       let langs = joinLangs
+      let mine = joinMyLangsRef.current
       if (!langs) {
-        const ok = await lookupRoom(code)
-        if (!ok) {
+        const found = await lookupRoom(code)
+        if (!found) {
           setJoining(false)
           return setJoinError('No room with that code.')
         }
-        langs = joinLangs
+        langs = found.langs
+        mine = found.mine
       }
-      const language = joinLang || langs![0]
-      await doJoin(code, joinName.trim(), language)
+      if (mine.length === 0) return setJoinError('Pick at least one language you understand.')
+      await doJoin(code, joinName.trim(), mine)
     } catch {
       setJoinError('Network problem — try again.')
     } finally {
@@ -159,15 +180,21 @@ export function HomeView({
     }
   }
 
-  async function doJoin(code: string, name: string, language: string) {
+  async function doJoin(code: string, name: string, myLanguages: string[]) {
     const res = await fetch(`/api/meetings/${encodeURIComponent(code)}/join`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, language }),
+      body: JSON.stringify({ name, language: myLanguages[0] }),
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error ?? 'Could not join.')
-    onJoined({ participantId: data.participantId, name, language, meeting: data.meeting })
+    onJoined({
+      participantId: data.participantId,
+      name,
+      language: myLanguages[0],
+      myLanguages,
+      meeting: data.meeting,
+    })
   }
 
   const totalMinutes = (usage?.engines ?? []).reduce((a, e) => a + e.minutes, 0)
@@ -270,10 +297,26 @@ export function HomeView({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="create-speak" className="text-[13px] font-medium text-foreground">
-                    I understand
-                  </label>
-                  <LanguageSelect id="create-speak" value={speakAs} onChange={setSpeakAs} options={picked} />
+                  <span className="text-[13px] font-medium text-foreground">
+                    I understand <span className="text-muted-foreground font-normal">(pick any)</span>
+                  </span>
+                  <LanguageMultiSelect
+                    id="create-understand"
+                    options={picked}
+                    selected={myPicked}
+                    onToggle={(code) =>
+                      setMyPicked((prev) =>
+                        prev.includes(code)
+                          ? prev.length > 1
+                            ? prev.filter((c) => c !== code)
+                            : prev
+                          : [...prev, code],
+                      )
+                    }
+                    onPrimary={(code) =>
+                      setMyPicked((prev) => [code, ...prev.filter((c) => c !== code)])
+                    }
+                  />
                 </div>
                 {createError && (
                   <p className="text-xs text-destructive" role="alert">{createError}</p>
@@ -328,15 +371,26 @@ export function HomeView({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="join-speak" className="text-[13px] font-medium text-foreground">
-                    I understand
-                  </label>
+                  <span className="text-[13px] font-medium text-foreground">
+                    I understand <span className="text-muted-foreground font-normal">(pick any)</span>
+                  </span>
                   {joinLangs ? (
-                    <LanguageSelect
-                      id="join-speak"
-                      value={joinLang || joinLangs[0]}
-                      onChange={setJoinLang}
+                    <LanguageMultiSelect
+                      id="join-understand"
                       options={joinLangs}
+                      selected={joinMyLangs}
+                      onToggle={(code) =>
+                        setJoinMyLangs((prev) =>
+                          prev.includes(code)
+                            ? prev.length > 1
+                              ? prev.filter((c) => c !== code)
+                              : prev
+                            : [...prev, code],
+                        )
+                      }
+                      onPrimary={(code) =>
+                        setJoinMyLangs((prev) => [code, ...prev.filter((c) => c !== code)])
+                      }
                     />
                   ) : (
                     <p className="text-xs text-muted-foreground h-10 flex items-center">

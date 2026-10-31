@@ -16,6 +16,7 @@ import { VoiceMeter } from '../audio/player'
 import type { PcmPlayer } from '../audio/player'
 import { CascadeChannel } from './cascade'
 import { S2sSession, s2sSupportsTarget } from './s2s'
+import { LANG_MAP } from '../languages'
 import type { BoothSettings } from '../settings-store'
 
 export type InterpStatus = 'idle' | 'connecting' | 'live' | 'error'
@@ -24,7 +25,7 @@ export type EngineUsed = 's2s' | 'cascade'
 export interface InterpreterEvents {
   onStatus: (status: InterpStatus, detail?: string) => void
   onSourceCaption: (id: string, text: string) => void
-  onTargetCaption: (id: string, text: string, engine: string, lagMs?: number, mode?: 'delta' | 'full') => void
+  onTargetCaption: (id: string, text: string, engine: string, lagMs?: number, mode?: 'delta' | 'full', targetLang?: string) => void
   onSelfLevel: (rms: number) => void
   onOutLevel: (rms: number) => void
   onError: (message: string) => void
@@ -70,6 +71,7 @@ export class BoothInterpreter {
     player: PcmPlayer
     events: InterpreterEvents
     keyReady: boolean
+    extraTargets?: string[]
   }) {
     this.stream = opts.stream
     this.targetLang = opts.targetLang
@@ -77,9 +79,14 @@ export class BoothInterpreter {
     this.player = opts.player
     this.events = opts.events
     this.keyReady = opts.keyReady
+    this.extraTargets = opts.extraTargets ?? []
   }
 
   private keyReady: boolean
+  /** Extra caption languages (voice stays in the primary targetLang). */
+  private extraTargets: string[]
+  /** Serialises the extra-caption translations, one sentence at a time. */
+  private extrasChain: Promise<void> = Promise.resolve()
 
   static async start(opts: {
     stream: MediaStream
@@ -88,10 +95,16 @@ export class BoothInterpreter {
     player: PcmPlayer
     events: InterpreterEvents
     keyReady: boolean
+    extraTargets?: string[]
   }): Promise<BoothInterpreter> {
     const it = new BoothInterpreter(opts)
     await it.init()
     return it
+  }
+
+  /** Live-update the extra caption languages while interpreting. */
+  setExtraTargets(langs: string[]) {
+    this.extraTargets = langs
   }
 
   private async init() {
@@ -143,6 +156,7 @@ export class BoothInterpreter {
           targetLang: this.targetLang,
           events: {
             onSourceDelta: (t) => this.pushSourceDelta(t),
+            onSourceDone: (t) => this.translateExtras(t),
             onTargetDelta: (t) => this.pushTargetDelta(t, 's2s', 'delta'),
             onConnected: () => {
               this.engine = 's2s'
@@ -181,6 +195,7 @@ export class BoothInterpreter {
     this.cascade = new CascadeChannel('auto', this.targetLang, settings, {
       onSourceCaption: (text) => this.pushSourceDelta(text, true),
       onTargetCaption: (text, engine, lagMs) => this.pushTargetDelta(text, engine, 'full', lagMs),
+      onSourceSentence: (text) => this.translateExtras(text),
       onTtsPcm: (pcm) => this.player.push(pcm),
       onError: (m) => this.events.onError(m),
     })
@@ -276,6 +291,63 @@ export class BoothInterpreter {
     this.lastTgtDelta = Date.now()
     this.events.onTargetCaption(id, text, engine, lagMs, mode)
     if (mode === 'full') this.tgtEntryId = '' // each translated sentence is its own entry
+  }
+
+  // ---------- extra caption languages ----------
+
+  /**
+   * Translate one finished source sentence into every extra caption
+   * language (one batched LLM call through the shared-key proxy) and emit
+   * each as its own caption entry tagged with its language. No voice —
+   * voice stays in the participant's primary language.
+   */
+  private translateExtras(sentence: string) {
+    const targets = [...new Set(this.extraTargets)].filter((l) => l && l !== this.targetLang)
+    if (targets.length === 0 || !sentence.trim()) return
+    this.extrasChain = this.extrasChain
+      .then(() => this.callExtras(sentence.trim(), targets))
+      .catch(() => {
+        // extra captions are best-effort — never break the main lane
+      })
+  }
+
+  private async callExtras(sentence: string, targets: string[]) {
+    const names = targets.map((l) => `${l}=${LANG_MAP[l]?.name ?? l}`).join(', ')
+    const res = await fetch('/api/openai/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: this.settings.llmModel,
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              `You are a live captioning translator. Translate the user's message into ALL of these languages: ${names}. ` +
+              `Reply with ONLY a JSON object mapping each language code to the natural spoken translation, ` +
+              `like {"${targets[0]}": "..."}. Keep numbers and names exact. Never explain.`,
+          },
+          { role: 'user', content: sentence },
+        ],
+      }),
+    })
+    if (!res.ok) return
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+    let parsed: Record<string, unknown> = {}
+    try {
+      parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}') as Record<string, unknown>
+    } catch {
+      return
+    }
+    const translations = (parsed.translations ?? parsed) as Record<string, unknown>
+    const lagMs = 0
+    for (const lang of targets) {
+      const text = String(translations[lang] ?? '').trim()
+      if (!text) continue
+      this.seq += 1
+      this.events.onTargetCaption(`tgt-x${this.seq}-${lang}`, text, 'captions', lagMs, 'full', lang)
+    }
   }
 
   /** Mute/unmute the translated voice (captions keep running). */

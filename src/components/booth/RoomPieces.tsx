@@ -104,24 +104,38 @@ export function CaptionEntry({
   sourceLang,
   sourceText,
   targetText,
+  targetLang,
   lagMs,
 }: {
   name: string
   sourceLang: string
   sourceText: string
   targetText?: string
+  /** Set when this entry is an extra caption language (no voice). */
+  targetLang?: string
   lagMs?: number
 }) {
-  const lang = LANG_MAP[sourceLang]
+  const lang = targetLang ? LANG_MAP[targetLang] : LANG_MAP[sourceLang]
   return (
     <article className="px-5 py-3 border-b border-hairline/70 last:border-b-0">
       <header className="flex items-center gap-2 mb-1">
         <Dot color={lang?.dot ?? '#888'} />
-        <span className="text-xs font-medium text-foreground/80">{name}</span>
-        <span className="text-[11px] text-muted-foreground">
-          {lang?.name ?? (sourceLang === 'auto' ? 'auto-detected' : sourceLang)}
-        </span>
-        {lagMs !== undefined && lagMs > 0 && targetText && (
+        {targetLang ? (
+          <span className="text-xs font-medium text-foreground/80">
+            {lang?.native ?? targetLang}
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground border border-border rounded px-1">
+              captions
+            </span>
+          </span>
+        ) : (
+          <>
+            <span className="text-xs font-medium text-foreground/80">{name}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {lang?.name ?? (sourceLang === 'auto' ? 'auto-detected' : sourceLang)}
+            </span>
+          </>
+        )}
+        {lagMs !== undefined && lagMs > 0 && targetText && !targetLang && (
           <span className="ml-auto text-[11px] text-warn">
             voice {(lagMs / 1000).toFixed(1)} s behind
           </span>
@@ -130,9 +144,11 @@ export function CaptionEntry({
       <p className="font-caption text-[17px] leading-relaxed font-medium text-foreground">
         {targetText ?? <span className="text-muted-foreground/60 italic">interpreting…</span>}
       </p>
-      <p className="font-caption mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
-        {sourceText}
-      </p>
+      {!targetLang && sourceText && (
+        <p className="font-caption mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+          {sourceText}
+        </p>
+      )}
     </article>
   )
 }

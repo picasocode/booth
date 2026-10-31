@@ -26,6 +26,8 @@ interface CaptionItem {
   targetText?: string
   engine?: string
   lagMs?: number
+  /** Set for extra caption-language entries (no voice). */
+  targetLang?: string
   updatedAt: number
 }
 
@@ -60,8 +62,15 @@ export function RoomView({
   const [engineUsed, setEngineUsed] = useState<EngineUsed | null>(null)
   const [participants, setParticipants] = useState<ParticipantView[]>([])
   const [captions, setCaptions] = useState<CaptionItem[]>([])
-  const [myLang, setMyLang] = useState(
-    session.languages.includes(session.language) ? session.language : session.languages[0],
+  const [myLang, setMyLang] = useState(() => {
+    const mine = session.myLanguages?.[0] ?? session.language
+    return session.languages.includes(mine) ? mine : session.languages[0]
+  })
+  // extra caption languages — everything else I understand, minus the primary
+  const [extraLangs, setExtraLangs] = useState<string[]>(() =>
+    (session.myLanguages ?? [])
+      .slice(1)
+      .filter((l, i) => l !== (session.myLanguages?.[0] ?? session.language) && session.languages.includes(l)),
   )
   const [voiceOut, setVoiceOut] = useState(settings.voiceOut)
   const [meters, setMeters] = useState({ self: 0, out: 0 })
@@ -73,6 +82,12 @@ export function RoomView({
   useEffect(() => {
     myLangRef.current = myLang
   }, [myLang])
+
+  const extraLangsRef = useRef<string[]>(extraLangs)
+  useEffect(() => {
+    extraLangsRef.current = extraLangs
+    interpRef.current?.setExtraTargets(extraLangs)
+  }, [extraLangs])
 
   // ---------------- usage metering ----------------
 
@@ -138,6 +153,7 @@ export function RoomView({
           targetLang: myLangRef.current,
           settings,
           keyReady: shared.configured,
+          extraTargets: extraLangsRef.current,
           player,
           events: {
             onStatus: (s, detail) => {
@@ -147,11 +163,11 @@ export function RoomView({
             onSourceCaption: (id, text) => {
               setCaptions((prev) => upsertAppend(prev, id, { sourceText: text }).slice(-120))
             },
-            onTargetCaption: (id, text, engine, lagMs, mode) => {
+            onTargetCaption: (id, text, engine, lagMs, mode, targetLang) => {
               setCaptions((prev) =>
                 (mode === 'full'
-                  ? upsertReplace(prev, id, { targetText: text, engine, lagMs })
-                  : upsertAppend(prev, id, { targetText: text, engine })
+                  ? upsertReplace(prev, id, { targetText: text, engine, lagMs, targetLang })
+                  : upsertAppend(prev, id, { targetText: text, engine, targetLang })
                 ).slice(-120),
               )
             },
@@ -231,11 +247,14 @@ export function RoomView({
     async (lang: string) => {
       setMyLang(lang)
       myLangRef.current = lang
+      // the new primary moves out of the extra-caption set
+      setExtraLangs((prev) => prev.filter((l) => l !== lang))
       try {
         const raw = sessionStorage.getItem('booth-session')
         if (raw) {
           const s = JSON.parse(raw)
           s.language = lang
+          s.myLanguages = [lang, ...((s.myLanguages ?? []) as string[]).filter((l: string) => l !== lang)]
           sessionStorage.setItem('booth-session', JSON.stringify(s))
         }
       } catch {
@@ -438,14 +457,38 @@ export function RoomView({
 
         {/* captions */}
         <section className="flex flex-col min-h-0" aria-label="Live captions">
-          <div className="flex items-center gap-3 px-5 py-2 border-b border-hairline shrink-0">
-            <span className="text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 px-5 py-2 border-b border-hairline shrink-0 flex-wrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               Captions in{' '}
               <span className="font-medium text-foreground font-caption">
                 {LANG_MAP[myLang]?.native ?? myLang}
               </span>
             </span>
-            <span className="ml-auto text-[11px] text-muted-foreground hidden sm:inline">
+            {session.languages
+              .filter((l) => l !== myLang)
+              .map((l) => {
+                const on = extraLangs.includes(l)
+                return (
+                  <button
+                    key={l}
+                    type="button"
+                    aria-pressed={on}
+                    title={on ? 'Captions on — click to turn off' : 'Add captions in this language'}
+                    onClick={() =>
+                      setExtraLangs((prev) => (prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]))
+                    }
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-[11px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                      on
+                        ? 'border-live bg-live/10 text-foreground'
+                        : 'border-border bg-card text-muted-foreground hover:border-input hover:text-foreground'
+                    }`}
+                  >
+                    <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: LANG_MAP[l]?.dot ?? '#888' }} />
+                    <span className="font-caption">{LANG_MAP[l]?.native ?? l}</span>
+                  </button>
+                )
+              })}
+            <span className="ml-auto text-[11px] text-muted-foreground hidden sm:inline whitespace-nowrap">
               voice runs a few seconds behind the speaker
             </span>
           </div>
@@ -476,8 +519,9 @@ export function RoomView({
                     Start interpreting and let Booth hear the meeting — through your
                     microphone or a shared browser tab. Everything anyone says will appear
                     here in{' '}
-                    <span className="font-caption">{LANG_MAP[myLang]?.native ?? myLang}</span>,
-                    with the interpreted voice on your audio.
+                    <span className="font-caption">{LANG_MAP[myLang]?.native ?? myLang}</span>{' '}
+                    (plus any extra caption languages you switch on above), with the
+                    interpreted voice on your audio.
                   </p>
                 </div>
               </div>
@@ -489,6 +533,7 @@ export function RoomView({
                   sourceLang={c.sourceLang}
                   sourceText={c.sourceText}
                   targetText={c.targetText}
+                  targetLang={c.targetLang}
                   lagMs={c.lagMs}
                 />
               ))

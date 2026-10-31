@@ -7,8 +7,12 @@ export interface BoothSession {
   meetingId: string
   participantId: string
   name: string
+  /** Primary language — the one you hear spoken. */
   language: string
+  /** Every language you understand, primary first (extras are captions). */
+  myLanguages: string[]
   meetingName: string
+  /** The room's language set. */
   languages: string[]
 }
 

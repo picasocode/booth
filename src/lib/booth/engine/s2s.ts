@@ -51,6 +51,8 @@ function extractSecret(data: unknown): string | null {
 export interface S2sEvents {
   onSourceDelta: (text: string) => void
   onTargetDelta: (text: string) => void
+  /** A complete source utterance (used for extra caption languages). */
+  onSourceDone?: (text: string) => void
   onConnected: () => void
   onClosed: () => void
   onError: (message: string) => void
@@ -181,7 +183,10 @@ export class S2sSession {
       if (text) this.events.onSourceDelta(text)
     } else if (SOURCE_DONE_TYPES.has(type)) {
       const text = evt.transcript ?? evt.text ?? ''
-      if (text) this.events.onSourceDelta(` ${text}`)
+      if (text) {
+        this.events.onSourceDelta(` ${text}`)
+        this.events.onSourceDone?.(text)
+      }
     } else if (type === 'session.error' || type === 'error' || type === 'response.error') {
       const msg = evt.error?.message ?? evt.message ?? 'realtime session error'
       this.events.onError(`gpt-realtime-translate: ${String(msg).slice(0, 180)}`)

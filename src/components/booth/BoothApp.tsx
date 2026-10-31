@@ -17,6 +17,7 @@ export function BoothApp() {
       participantId: result.participantId,
       name: result.name,
       language: result.language,
+      myLanguages: result.myLanguages,
       meetingName: result.meeting.name,
       languages: result.meeting.languages,
     })

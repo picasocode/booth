@@ -23,6 +23,8 @@ const SENTENCE_END = /[.!?。！？।…]$/
 export interface CascadeEvents {
   onSourceCaption: (text: string, final: boolean) => void
   onTargetCaption: (text: string, engine: string, lagMs: number) => void
+  /** A complete source sentence — used for the extra caption languages. */
+  onSourceSentence?: (text: string) => void
   onTtsPcm: (pcm: Int16Array) => void
   onError: (message: string) => void
 }
@@ -161,6 +163,8 @@ export class CascadeChannel {
     const text = this.sentence.trim()
     if (!text) return
     this.sentence = ''
+    // extra caption languages ride along on the finished sentence
+    this.events.onSourceSentence?.(text)
     await this.interpret({ text, spokeAt, final })
   }
 
